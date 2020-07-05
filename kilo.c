@@ -32,7 +32,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#define KILO_VERSION "0.0.1"
+#define KILO_VERSION "0.0.2"
 
 #ifdef __linux__
 #define _POSIX_C_SOURCE 200809L
@@ -218,6 +218,7 @@ void disableRawMode(int fd) {
 /* Called at exit to avoid remaining in raw mode. */
 void editorAtExit(void) {
     disableRawMode(STDIN_FILENO);
+    system("clear");
 }
 
 /* Raw mode: 1960 magic shit. */
@@ -781,12 +782,13 @@ void editorDelChar() {
             E.rowoff--;
         else
             E.cy--;
-        E.cx = filecol;
-        if (E.cx >= E.screencols) {
-            int shift = (E.screencols-E.cx)+1;
-            E.cx -= shift;
-            E.coloff += shift;
+
+        if (filecol > E.screencols - 2) {
+            E.coloff = E.screencols / 2;
         }
+
+        E.cx = filecol - E.coloff;
+
     } else {
         editorRowDelChar(row,filecol-1);
         if (E.cx == 0 && E.coloff)
@@ -1338,9 +1340,14 @@ void editorMoveCursor(int key) {
         }
         break;
     case HOME_KEY:
+        E.coloff = 0;
         E.cx = 0;
         break;
     case END_KEY:
+        if (row->size > E.screencols-1){
+            E.coloff = row->size - (E.screencols - 1);
+        }
+
         E.cx = row->size;
         break;
     }
@@ -1384,7 +1391,6 @@ void editorProcessKeypress(int fd) {
             quit_times--;
             return;
         }
-        system("@cls||clear");
         exit(0);
         break;
     case CTRL_S:        /* Ctrl-s */
@@ -1424,7 +1430,8 @@ void editorProcessKeypress(int fd) {
         /* Just refresht the line as side effect. */
         break;
     case ESC:
-        /* Nothing to do for ESC in this mode. */
+        editorSetStatusMessage(
+                "Help: Ctrl-S = Save | Ctrl-F = Find | Ctrl-G = Goto Line | Ctrl-Q = Quit");
         break;
     case CTRL_B:
         editorBuildFile(fd);
@@ -1491,7 +1498,7 @@ int main(int argc, char **argv) {
     editorOpen(argv[1]);
     enableRawMode(STDIN_FILENO);
     editorSetStatusMessage(
-        "HELP: Ctrl-S = save | Ctrl-Q = quit | Ctrl-F = find");
+        "Help: Ctrl-S = Save | Ctrl-F = Find | Ctrl-G = Goto Line | Ctrl-Q = Quit");
     while(1) {
         editorRefreshScreen();
         editorProcessKeypress(STDIN_FILENO);
