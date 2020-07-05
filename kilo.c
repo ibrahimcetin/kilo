@@ -113,16 +113,20 @@ static struct editorConfig E;
 
 enum KEY_ACTION{
         KEY_NULL = 0,       /* NULL */
+        CTRL_B = 2,         /* Ctrl-b */
         CTRL_C = 3,         /* Ctrl-c */
         CTRL_D = 4,         /* Ctrl-d */
         CTRL_F = 6,         /* Ctrl-f */
+        CTRL_G = 7,         /* Ctrl-g */
         CTRL_H = 8,         /* Ctrl-h */
         TAB = 9,            /* Tab */
         CTRL_L = 12,        /* Ctrl+l */
         ENTER = 13,         /* Enter */
         CTRL_Q = 17,        /* Ctrl-q */
         CTRL_S = 19,        /* Ctrl-s */
+        CTRL_T = 20,        /* Ctrl-t */
         CTRL_U = 21,        /* Ctrl-u */
+        CTRL_X = 24,        /* Crtl-x */
         ESC = 27,           /* Escape */
         BACKSPACE =  127,   /* Backspace */
         /* The following are just soft codes, not really reported by the
@@ -139,6 +143,8 @@ enum KEY_ACTION{
 };
 
 void editorSetStatusMessage(const char *fmt, ...);
+
+void editorRefreshScreen(void);
 
 /* =========================== Syntax highlights DB =========================
  *
@@ -851,6 +857,170 @@ writeerr:
     return 1;
 }
 
+const char *get_filename_ext(const char *filename) {
+    const char *dot = strrchr(filename, '.');
+    if(!dot || dot == filename) return "";
+    return dot + 1;
+}
+
+const char *remove_file_extension(const char *filename){
+    int i;
+    int len = strlen(filename);
+
+    char *filename_without_extension = malloc(256);
+    strcpy(filename_without_extension, filename);
+
+    for (i = len-1; i > 0; i--){
+        if (filename[i] == '.') break;
+    }
+
+    filename_without_extension[len-(len-i)] = '\0';
+
+    return filename_without_extension;
+}
+
+int editorBuildFile(int fd){
+    char *filename = malloc(256);
+    strcpy(filename, E.filename);
+
+    if (!strcmp(get_filename_ext(filename), "c")){
+        char query[512];
+        static char argument_query[256];
+        static int qlen = 0;
+
+        while(1) {
+            editorSetStatusMessage(
+                "Compiler Arguments: %s (Use ESC/Enter)", argument_query);
+            editorRefreshScreen();
+
+            int c = editorReadKey(fd);
+            if (c == DEL_KEY || c == CTRL_H || c == BACKSPACE) {
+                if (qlen != 0) argument_query[--qlen] = '\0';
+            } else if (c == ENTER) {
+                editorSetStatusMessage("");
+                break;
+            } else if (c == ESC){
+                editorSetStatusMessage("");
+                return 0;
+            }  else if (isprint(c)) {
+                if (qlen < 256) {
+                    argument_query[qlen++] = c;
+                    argument_query[qlen] = '\0';
+                }
+            }
+        }
+
+        const char *filename_without_extension = remove_file_extension(filename);
+
+        if (strlen(argument_query) == 0){
+            snprintf(query, sizeof query, "%s %s %s %s %s %s", "xterm -e /bin/bash -c", "'gcc", filename, "-o", filename_without_extension, "; read -n 1 -r -s -p $\"Press enter to continue...\"'");
+        } else {
+            snprintf(query, sizeof query, "%s %s %s %s %s", "xterm -e /bin/bash -c", "'gcc", filename, argument_query, "; read -n 1 -r -s -p $\"Press enter to continue...\"'");
+        }
+
+        system(query);
+    }
+
+    return 0;
+}
+
+int editorExecuteFile(int fd){
+    char *filename = malloc(256);
+    strcpy(filename, E.filename);
+
+    if (!strcmp(get_filename_ext(filename), "c")){
+        char query[512];
+        static char argument_query[256];
+        static int qlen = 0;
+
+        while(1) {
+            editorSetStatusMessage(
+                "Execute Arguments: %s (Use ESC/Enter)", argument_query);
+            editorRefreshScreen();
+
+            int c = editorReadKey(fd);
+            if (c == DEL_KEY || c == CTRL_H || c == BACKSPACE) {
+                if (qlen != 0) argument_query[--qlen] = '\0';
+            } else if (c == ENTER) {
+                editorSetStatusMessage("");
+                break;
+            } else if (c == ESC){
+                editorSetStatusMessage("");
+                return 0;
+            }  else if (isprint(c)) {
+                if (qlen < 256) {
+                    argument_query[qlen++] = c;
+                    argument_query[qlen] = '\0';
+                }
+            }
+        }
+
+        const char *filename_without_extension = remove_file_extension(filename);
+
+        if (strlen(argument_query) == 0){
+            snprintf(query, sizeof query, "%s %s%s %s", "xterm -e /bin/bash -c", "'./", filename_without_extension, "; read -n 1 -r -s -p $\"Press enter to continue...\"'");
+        } else {
+            snprintf(query, sizeof query, "%s %s%s %s %s", "xterm -e /bin/bash -c", "'./", filename_without_extension, argument_query, "; read -n 1 -r -s -p $\"Press enter to continue...\"'");
+        }
+
+        system(query);
+    }
+
+    free(filename);
+
+    return 0;
+}
+
+int editorOpenTerminal(void){
+    system("xterm -e '/bin/bash'");
+
+    return 0;
+}
+
+int editorGotoLine(int fd){
+    char query[256] = "";
+    int qlen = 0;
+    int line;
+
+    while(1) {
+        editorSetStatusMessage(
+            "Goto: %s. line", query);
+        editorRefreshScreen();
+
+        int c = editorReadKey(fd);
+        if (c == DEL_KEY || c == CTRL_H || c == BACKSPACE) {
+            if (qlen != 0) query[--qlen] = '\0';
+        } else if (c == ENTER) {
+            editorSetStatusMessage("");
+            break;
+        } else if (c == ESC){
+            editorSetStatusMessage("");
+            return 0;
+        }  else if (isdigit(c)) {
+            if (qlen < 256) {
+                query[qlen++] = c;
+                query[qlen] = '\0';
+            }
+        }
+    }
+
+    sscanf(query, "%d", &line);
+    if (line <= E.numrows){
+        if (line > E.screenrows-1) {
+                E.rowoff = line - E.screenrows;
+                E.cy = E.screenrows-1;
+            } else {
+                E.rowoff = 0;
+                E.cy = line-1;
+            }
+    } else {
+        line = E.numrows;
+        E.rowoff = line - E.screenrows;
+        E.cy = E.screenrows-1;
+    }
+    return 0;
+}
+
 /* ============================= Terminal update ============================ */
 
 /* We define a very simple "append buffer" structure, that is an heap
@@ -957,7 +1127,7 @@ void editorRefreshScreen(void) {
     int len = snprintf(status, sizeof(status), "%.20s - %d lines %s",
         E.filename, E.numrows, E.dirty ? "(modified)" : "");
     int rlen = snprintf(rstatus, sizeof(rstatus),
-        "%d/%d",E.rowoff+E.cy+1,E.numrows);
+        "row: %d/%d | col: %d ",E.rowoff+E.cy+1, E.numrows, E.coloff+E.cx+1);
     if (len > E.screencols) len = E.screencols;
     abAppend(&ab,status,len);
     while(len < E.screencols) {
@@ -1167,7 +1337,14 @@ void editorMoveCursor(int key) {
             }
         }
         break;
+    case HOME_KEY:
+        E.cx = 0;
+        break;
+    case END_KEY:
+        E.cx = row->size;
+        break;
     }
+
     /* Fix cx if the current line has not enough chars. */
     filerow = E.rowoff+E.cy;
     filecol = E.coloff+E.cx;
@@ -1202,11 +1379,12 @@ void editorProcessKeypress(int fd) {
     case CTRL_Q:        /* Ctrl-q */
         /* Quit if the file was already saved. */
         if (E.dirty && quit_times) {
-            editorSetStatusMessage("WARNING!!! File has unsaved changes. "
+            editorSetStatusMessage("WARNING! File has unsaved changes. "
                 "Press Ctrl-Q %d more times to quit.", quit_times);
             quit_times--;
             return;
         }
+        system("@cls||clear");
         exit(0);
         break;
     case CTRL_S:        /* Ctrl-s */
@@ -1238,6 +1416,8 @@ void editorProcessKeypress(int fd) {
     case ARROW_DOWN:
     case ARROW_LEFT:
     case ARROW_RIGHT:
+    case HOME_KEY:
+    case END_KEY:
         editorMoveCursor(c);
         break;
     case CTRL_L: /* ctrl+l, clear screen */
@@ -1245,6 +1425,18 @@ void editorProcessKeypress(int fd) {
         break;
     case ESC:
         /* Nothing to do for ESC in this mode. */
+        break;
+    case CTRL_B:
+        editorBuildFile(fd);
+        break;
+    case CTRL_X:
+        editorExecuteFile(fd);
+        break;
+    case CTRL_T:
+        editorOpenTerminal();
+        break;
+    case CTRL_G:
+        editorGotoLine(fd);
         break;
     default:
         editorInsertChar(c);
