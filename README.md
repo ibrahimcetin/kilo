@@ -9,9 +9,14 @@ Usage: kilo `<filename>`
 
 Keys:
 
+    ESC   : Help Menu
     CTRL-S: Save
-    CTRL-Q: Quit
     CTRL-F: Find string in file (ESC to exit search, arrows to navigate)
+    CTRL-G: Goto Line
+    CTRL-T: Open Terminal (tmux)
+    CTRL-B: Build C file
+    CTRL-X: Execute C binary file
+    CTRL-Q: Quit
 
 Kilo does not depend on any library (not even curses). It uses fairly standard
 VT100 (and similar terminals) escape sequences. The project is in alpha
