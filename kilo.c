@@ -1331,7 +1331,7 @@ void editorMoveCursor(int key) {
         }
         break;
     case ARROW_DOWN:
-        if (filerow < E.numrows) {
+        if (filerow < E.numrows-1) {
             if (E.cy == E.screenrows-1) {
                 E.rowoff++;
             } else {
